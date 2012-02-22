@@ -44,14 +44,19 @@ real_to_small_IDs = {}
 cur_small_id = 1
 
 import re, types
+import logging
+
 typeRE = re.compile("<type '(.*)'>")
 classRE = re.compile("<class '(.*)'>")
 
 def encode(dat, ignore_id=False):
   def encode_helper(dat, compound_obj_ids):
+    logger = logging.getLogger('My logger')
+    #logger.info('Starting encode_helper')  
+  
     # primitive type
     if dat is None or \
-       type(dat) in (int, long, float, str, bool):
+       type(dat) in (int, float, str, bool):
       return dat
     # compound type
     else:
@@ -74,6 +79,7 @@ def encode(dat, ignore_id=False):
 
       my_small_id = real_to_small_IDs[my_id]
 
+      logger.info("Type: "+str(typ)) 
       if typ == list:
         ret = ['LIST', my_small_id]
         for e in dat: ret.append(encode_helper(e, new_compound_obj_ids))
@@ -89,10 +95,13 @@ def encode(dat, ignore_id=False):
           # don't display some built-in locals ...
           if k not in ('__module__', '__return__'):
             ret.append([encode_helper(k, new_compound_obj_ids), encode_helper(v, new_compound_obj_ids)])
-      elif typ in (types.InstanceType, types.ClassType, types.TypeType) or \
-           classRE.match(str(typ)):
+      #elif typ in (types.InstanceType, types.ClassType, types.TypeType) or \
+	  #     classRE.match(str(typ)):
+      elif hasattr(typ, '__call__'):
+          ret = ['function', my_small_id, str(dat)]
+      elif isinstance(typ,type) or classRE.match(str(typ)):
         # ugh, classRE match is a bit of a hack :(
-        if typ == types.InstanceType or classRE.match(str(typ)):
+        if not(isinstance(typ,type)):
           ret = ['INSTANCE', dat.__class__.__name__, my_small_id]
         else:
           superclass_names = [e.__name__ for e in dat.__bases__]

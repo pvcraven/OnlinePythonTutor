@@ -42,19 +42,30 @@ LOG_QUERIES = False # don't do logging for now
 
 import cgi
 import pg_logger
+import logging
 
+logging.basicConfig(
+	filename='c:\\temp\\web_exec.log',
+	format='%(asctime)-6s: %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger('My logger')
+logger.setLevel(logging.INFO)
+	
 # Python 2.5 doesn't have a built-in json module, so I'm using a
 # 3rd-party module.  I think you can do 'import json' in Python >= 2.6
-import demjson
+import json
 
 if LOG_QUERIES:
   import os, time, db_common
 
 def web_finalizer(output_lst):
+  logger = logging.getLogger('My logger')
+  logger.info('Starting web_finalizer')
   # use compactly=False to produce human-readable JSON,
   # except at the expense of being a LARGER download
-  output_json = demjson.encode(output_lst, compactly=True)
-
+  output_json = json.dumps(output_lst)
+  logger.info("User script:"+user_script)
+  logger.info("json dump: "+output_json)
+  
   # query logging is optional
   if LOG_QUERIES:
     # just to be paranoid, don't croak the whole program just
@@ -84,8 +95,8 @@ def web_finalizer(output_lst):
 
   # Crucial first line to make sure that Apache serves this data
   # correctly - DON'T FORGET THE EXTRA NEWLINES!!!:
-  print "Content-type: text/plain; charset=iso-8859-1\n\n"
-  print output_json
+  print ("Content-type: text/plain; charset=iso-8859-1\n\n")
+  print (output_json)
 
 
 form = cgi.FieldStorage()

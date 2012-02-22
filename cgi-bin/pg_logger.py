@@ -40,9 +40,10 @@ import os
 import re
 import traceback
 
-import cStringIO
+import io
 import pg_encoder
 
+import logging
 
 IGNORE_VARS = set(('__stdout__', '__builtins__', '__name__', '__exception__'))
 
@@ -61,7 +62,7 @@ def get_user_locals(frame):
 
 def filter_var_dict(d):
   ret = {}
-  for (k,v) in d.iteritems():
+  for (k,v) in d.items():
     if k not in IGNORE_VARS:
       ret[k] = v
   return ret
@@ -165,7 +166,7 @@ class PGLogger(bdb.Bdb):
           # encode in a JSON-friendly format now, in order to prevent ill
           # effects of aliasing later down the line ...
           encoded_locals = {}
-          for (k, v) in get_user_locals(cur_frame).iteritems():
+          for (k, v) in get_user_locals(cur_frame).items():
             # don't display some built-in locals ...
             if k != '__module__':
               encoded_locals[k] = pg_encoder.encode(v, self.ignore_id)
@@ -176,7 +177,7 @@ class PGLogger(bdb.Bdb):
         # encode in a JSON-friendly format now, in order to prevent ill
         # effects of aliasing later down the line ...
         encoded_globals = {}
-        for (k, v) in get_user_globals(tos[0]).iteritems():
+        for (k, v) in get_user_globals(tos[0]).items():
           encoded_globals[k] = pg_encoder.encode(v, self.ignore_id)
 
         trace_entry = dict(line=lineno,
@@ -202,6 +203,8 @@ class PGLogger(bdb.Bdb):
 
 
     def _runscript(self, script_str):
+        logger = logging.getLogger('My logger')
+        logger.info('Starting _runscript')
         # When bdb sets tracing, a number of call and line events happens
         # BEFORE debugger even reaches user's code (and the exact sequence of
         # events depends on python version). So we take special measures to
@@ -212,7 +215,7 @@ class PGLogger(bdb.Bdb):
         # ok, let's try to sorta 'sandbox' the user script by not
         # allowing certain potentially dangerous operations:
         user_builtins = {}
-        for (k,v) in __builtins__.iteritems():
+        for (k,v) in __builtins__.items():
           if k in ('reload', 'input', 'apply', 'open', 'compile', 
                    '__import__', 'file', 'eval', 'execfile',
                    'exit', 'quit', 'raw_input', 
@@ -222,7 +225,7 @@ class PGLogger(bdb.Bdb):
           user_builtins[k] = v
 
         # redirect stdout of the user program to a memory buffer
-        user_stdout = cStringIO.StringIO()
+        user_stdout = io.StringIO()
         sys.stdout = user_stdout
  
         user_globals = {"__name__"    : "__main__",
@@ -230,12 +233,16 @@ class PGLogger(bdb.Bdb):
                         "__stdout__" : user_stdout}
 
         try:
+          logger.info('Running user script')
           self.run(script_str, user_globals, user_globals)
+          logger.info('Done running user script')
         # sys.exit ...
         except SystemExit:
           sys.exit(0)
         except:
+          logger.info('Exception running script')
           #traceback.print_exc() # uncomment this to see the REAL exception msg
+          logger.error(traceback.format_exc())
 
           trace_entry = dict(event='uncaught_exception')
 
@@ -288,6 +295,8 @@ class PGLogger(bdb.Bdb):
 
 # the MAIN meaty function!!!
 def exec_script_str(script_str, finalizer_func, ignore_id=False):
+  logger = logging.getLogger('My logger')
+  logger.info('Starting exec_script_str')
   logger = PGLogger(finalizer_func, ignore_id)
   logger._runscript(script_str)
   logger.finalize()
@@ -297,7 +306,7 @@ def exec_file_and_pretty_print(mainpyfile):
   import pprint
 
   if not os.path.exists(mainpyfile):
-    print 'Error:', mainpyfile, 'does not exist'
+    print ('Error:', mainpyfile, 'does not exist')
     sys.exit(1)
 
   def pretty_print(output_lst):
